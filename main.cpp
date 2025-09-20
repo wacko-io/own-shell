@@ -2,11 +2,19 @@
 #include <string>
 using namespace std;
 int main() {
-    string input;
+    string line;
     while (true) {
-        cout << "$ ";
-        getline(cin, input);
-        cout << input << ": command not found" << endl;
+        cout << "$ " << flush;
+
+        if (!getline(cin, line)) {
+            cout << endl;
+            break;
+        }
+
+        if (line == "\\q")
+            break;
+
+        cout << line << endl;
     }
     return 0;
 }
