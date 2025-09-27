@@ -63,7 +63,7 @@ string unquote(const string& s) {
 }
 
 bool is_builtin(const string& cmd) {
-    return (cmd == "echo" || cmd == "history" || cmd == "\\q");
+    return (cmd == "echo" || cmd == "history" || cmd == "\\q" || cmd == "\\e");
 }
 
 int run_builtin(const vector<string>& tokens) {
@@ -85,6 +85,32 @@ int run_builtin(const vector<string>& tokens) {
             cout << unquote(tokens[i]);
         }
         cout << '\n';
+        return 0;
+    }
+
+    if (cmd == "\\e") {
+        if (tokens.size() < 2) {
+            cerr << "Usage: \\e $VARNAME" << endl;
+            return 1;
+        }
+        string var = tokens[1];
+        if (!var.empty() && var[0] == '$') var.erase(0, 1);
+        const char* val = getenv(var.c_str());
+        string s = val ? string(val) : "";
+        if (var == "PATH") {
+            size_t start = 0;
+            while (true) {
+                size_t pos = s.find(':', start);
+                if (pos == string::npos) {
+                    cout << s.substr(start) << endl;
+                    break;
+                }
+                cout << s.substr(start, pos - start) << endl;
+                start = pos + 1;
+            }
+        } else {
+            cout << s << endl;
+        }
         return 0;
     }
     return 0;
