@@ -5,6 +5,12 @@
 #include <vector>
 #include <cctype>
 
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <cerrno>
+#include <cstring>
+
 using namespace std;
 
 static string history_path() {
@@ -153,6 +159,37 @@ int run_builtin(const vector<string>& tokens) {
     return 0;
 }
 
+int run_external(const vector<string>& tokens) {
+    vector<char*> argv;
+    argv.reserve(tokens.size() + 1);
+    for (const auto& t : tokens) {
+        argv.push_back(const_cast<char*>(t.c_str()));
+    }
+    argv.push_back(nullptr);
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        cout << tokens[0] << ": fork failed" << endl;
+        return 127;
+    }
+
+    if (pid == 0) {
+        execvp(argv[0], argv.data());
+        cout << tokens[0] << ": command not found" << endl;
+        _exit(127);
+    }
+
+    int status = 0;
+    if (waitpid(pid, &status, 0) < 0) {
+        cout << tokens[0] << ": waitpid failed" << endl;
+        return 127;
+    }
+
+    if (WIFEXITED(status)) return WEXITSTATUS(status);
+    if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
+    return 127;
+}
+
 int main() {
     string line;
 
@@ -184,7 +221,7 @@ int main() {
             continue;
         }
 
-        cout << tokens[0] << ": command not found" << endl;
+        run_external(tokens);
     }
 
     return 0;
