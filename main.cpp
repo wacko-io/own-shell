@@ -3,6 +3,8 @@
 #include <fstream>
 #include <cstdlib>
 #include <vector>
+#include <cctype>
+
 using namespace std;
 
 static string history_path() {
@@ -14,7 +16,9 @@ static string history_path() {
 
 static void append_history(const string& line) {
     ofstream out(history_path(), ios::app);
-    if (out) out << line << '\n';
+    if (out) {
+        out << line << '\n';
+    }
 }
 
 void print_history() {
@@ -40,13 +44,28 @@ string trim(const string& s) {
 
 vector<string> tokenize(const string& line) {
     vector<string> out;
-    string cur; bool in_s = false, in_d = false;
-    for (char c: line) {
-        if (c == '\'' && !in_d) { in_s = !in_s; cur.push_back(c); continue; }
-        if (c == '\"' && !in_s) { in_d = !in_d; cur.push_back(c); continue; }
-        if (!in_s && !in_d && isspace((unsigned char)c)) {
-            if (!cur.empty()) { out.push_back(cur); cur.clear(); }
-        } else cur.push_back(c);
+    string cur;
+    bool in_s = false, in_d = false;
+
+    for (char c : line) {
+        if (c == '\'' && !in_d) {
+            in_s = !in_s;
+            cur.push_back(c);
+            continue;
+        }
+        if (c == '"' && !in_s) {
+            in_d = !in_d;
+            cur.push_back(c);
+            continue;
+        }
+        if (!in_s && !in_d && isspace(static_cast<unsigned char>(c))) {
+            if (!cur.empty()) {
+                out.push_back(cur);
+                cur.clear();
+            }
+        } else {
+            cur.push_back(c);
+        }
     }
     if (!cur.empty()) out.push_back(cur);
     return out;
@@ -55,7 +74,7 @@ vector<string> tokenize(const string& line) {
 string unquote(const string& s) {
     if (s.size() >= 2) {
         char q = s.front();
-        if ((q == '\'' || q == '\"') && s.back() == q) {
+        if ((q == '\'' || q == '"') && s.back() == q) {
             return s.substr(1, s.size() - 2);
         }
     }
@@ -63,7 +82,13 @@ string unquote(const string& s) {
 }
 
 bool is_builtin(const string& cmd) {
-    return (cmd == "echo" || cmd == "history" || cmd == "\\q" || cmd == "\\e");
+    return (
+        cmd == "echo"   ||
+        cmd == "history"||
+        cmd == "\\q"    ||
+        cmd == "\\e"    ||
+        cmd == "debug"
+    );
 }
 
 int run_builtin(const vector<string>& tokens) {
@@ -79,7 +104,15 @@ int run_builtin(const vector<string>& tokens) {
     }
 
     if (cmd == "echo") {
+        for (size_t i = 1; i < tokens.size(); ++i) {
+            if (i > 1) cout << ' ';
+            cout << unquote(tokens[i]);
+        }
+        cout << '\n';
+        return 0;
+    }
 
+    if (cmd == "debug") {
         for (size_t i = 1; i < tokens.size(); ++i) {
             if (i > 1) cout << ' ';
             cout << unquote(tokens[i]);
@@ -93,10 +126,13 @@ int run_builtin(const vector<string>& tokens) {
             cerr << "Usage: \\e $VARNAME" << endl;
             return 1;
         }
+
         string var = tokens[1];
         if (!var.empty() && var[0] == '$') var.erase(0, 1);
+
         const char* val = getenv(var.c_str());
         string s = val ? string(val) : "";
+
         if (var == "PATH") {
             size_t start = 0;
             while (true) {
@@ -113,12 +149,15 @@ int run_builtin(const vector<string>& tokens) {
         }
         return 0;
     }
+
     return 0;
 }
+
 int main() {
     string line;
+
     while (true) {
-        cout << "$ " << flush;
+        cerr << "$ " << flush;
 
         if (!getline(cin, line)) {
             cout << endl;
@@ -128,21 +167,25 @@ int main() {
         line = trim(line);
         if (line.empty()) continue;
 
-        if (line == "\\q")
+        if (line == "\\q") {
             break;
+        }
 
         vector<string> tokens = tokenize(line);
         if (tokens.empty()) continue;
 
+        append_history(line);
+
         if (is_builtin(tokens[0])) {
-            append_history(line);
             int rc = run_builtin(tokens);
-            if (rc == 255) break;
+            if (rc == 255) {
+                break;
+            }
             continue;
         }
 
         cout << tokens[0] << ": command not found" << endl;
-        append_history(line);
     }
+
     return 0;
 }
