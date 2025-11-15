@@ -4,12 +4,12 @@
 #include <cstdlib>
 #include <vector>
 #include <cctype>
-
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <cerrno>
 #include <cstring>
+#include <signal.h>
 
 using namespace std;
 
@@ -85,6 +85,12 @@ string unquote(const string& s) {
         }
     }
     return s;
+}
+
+static volatile sig_atomic_t hup_flag = 0;
+
+static void on_hup(int) {
+    hup_flag = 1;
 }
 
 bool is_builtin(const string& cmd) {
@@ -191,6 +197,12 @@ int run_external(const vector<string>& tokens) {
 }
 
 int main() {
+    struct sigaction sa{};
+    sa.sa_handler = on_hup;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART;
+    sigaction(SIGHUP, &sa, nullptr);
+
     string line;
 
     while (true) {
@@ -199,6 +211,11 @@ int main() {
         if (!getline(cin, line)) {
             cout << endl;
             break;
+        }
+
+        if (hup_flag) {
+            cout << "Configuration reloaded" << endl;
+            hup_flag = 0;
         }
 
         line = trim(line);
